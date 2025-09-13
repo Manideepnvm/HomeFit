@@ -7,6 +7,7 @@ import AuthService from './src/services/authService';
 import WorkoutService, { Workout } from './src/services/workoutService';
 import WorkoutPlayerScreen from './src/screens/WorkoutPlayerScreen';
 import WorkoutsScreen from './src/screens/WorkoutsScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('loading');
