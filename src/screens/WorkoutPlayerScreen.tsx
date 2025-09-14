@@ -19,9 +19,10 @@ interface Props {
   workout: Workout;
   onComplete: () => void;
   onExit: () => void;
+  onLogout: () => void;
 }
 
-const WorkoutPlayerScreen: React.FC<Props> = ({ workout, onComplete, onExit }) => {
+const WorkoutPlayerScreen: React.FC<Props> = ({ workout, onComplete, onExit, onLogout }) => {
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -150,7 +151,9 @@ const WorkoutPlayerScreen: React.FC<Props> = ({ workout, onComplete, onExit }) =
             <MaterialIcons name="close" size={24} color="#ffffff" />
           </TouchableOpacity>
           <Text style={styles.workoutTitle}>{workout.name}</Text>
-          <View style={styles.placeholder} />
+          <TouchableOpacity onPress={onLogout} style={styles.logoutButton}>
+            <MaterialIcons name="logout" size={24} color="#ffffff" />
+          </TouchableOpacity>
         </View>
         
         {/* Progress Bar */}
@@ -289,8 +292,10 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  placeholder: {
-    width: 40,
+  logoutButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   progressContainer: {
     alignItems: 'center',

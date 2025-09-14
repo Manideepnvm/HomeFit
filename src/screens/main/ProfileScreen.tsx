@@ -10,7 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainTabParamList } from '../../types';
-import { AuthService } from '../../services/auth';
+import AuthService from '../../services/authService';
 
 type ProfileScreenNavigationProp = StackNavigationProp<MainTabParamList, 'Profile'>;
 

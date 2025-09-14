@@ -3,29 +3,35 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput,
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import AuthService from './src/services/authService';
+import AuthService, { UserProfile } from './src/services/authService';
 import WorkoutService, { Workout } from './src/services/workoutService';
 import WorkoutPlayerScreen from './src/screens/WorkoutPlayerScreen';
 import WorkoutsScreen from './src/screens/WorkoutsScreen';
-import OnboardingScreen from './src/screens/OnboardingScreen';
+import { getRandomQuote, getWelcomeMessage } from './src/utils/motivationalQuotes';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('loading');
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
+  const [motivationalQuote, setMotivationalQuote] = useState<string>('');
 
   useEffect(() => {
     // Listen to authentication state changes
     const unsubscribe = AuthService.onAuthStateChanged((user) => {
+      console.log('Auth state changed:', user ? `User signed in: ${user.uid}` : 'User signed out');
+      
       setUser(user);
       setIsLoading(false);
       
       if (user) {
         // User is signed in, check if they have completed onboarding
+        console.log('Checking user profile for:', user.uid);
         checkUserProfile(user.uid);
       } else {
         // User is signed out
+        console.log('User signed out, showing auth screen');
         setCurrentScreen('auth');
       }
     });
@@ -35,25 +41,47 @@ export default function App() {
 
   const checkUserProfile = async (userId: string) => {
     try {
+      console.log('Fetching user profile for:', userId);
+      
+      // Try to sync offline data first
+      try {
+        await AuthService.syncOfflineProfile(userId);
+      } catch (syncError) {
+        console.log('Sync failed, continuing with profile check:', syncError);
+      }
+      
       const profile = await AuthService.getUserProfile(userId);
-      if (profile && profile.fitnessLevel !== 'beginner' || profile.primaryGoal !== 'general_fitness') {
+      console.log('User profile:', profile);
+      
+      // Store user profile
+      setUserProfile(profile);
+      
+      // Set a motivational quote
+      setMotivationalQuote(getRandomQuote());
+      
+      if (profile && (profile.fitnessLevel !== 'beginner' || profile.primaryGoal !== 'general_fitness')) {
         // User has completed onboarding
+        console.log('User has completed onboarding, showing welcome screen');
         setCurrentScreen('welcome');
       } else {
         // User needs to complete onboarding
+        console.log('User needs to complete onboarding');
         setCurrentScreen('onboarding');
       }
     } catch (error) {
       console.error('Error checking user profile:', error);
+      console.log('Error occurred, showing onboarding screen');
       setCurrentScreen('onboarding');
     }
   };
 
   const handleSignUp = () => {
+    // This will be called after successful signup
     setCurrentScreen('onboarding');
   };
 
   const handleSignIn = () => {
+    // This will be called after successful signin
     setCurrentScreen('welcome');
   };
 
@@ -93,6 +121,34 @@ export default function App() {
     setCurrentScreen('welcome');
   };
 
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('User initiated logout');
+              await AuthService.signOut();
+              console.log('Logout successful');
+              // The auth state listener will automatically handle the navigation
+            } catch (error: any) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Show loading screen while checking authentication
   if (isLoading) {
     return (
@@ -116,11 +172,11 @@ export default function App() {
   }
 
   if (currentScreen === 'onboarding') {
-    return <OnboardingScreen onBack={handleBackToAuth} />;
+    return <OnboardingScreen onBack={handleBackToAuth} onComplete={() => setCurrentScreen('welcome')} />;
   }
 
   if (currentScreen === 'workouts') {
-    return <WorkoutsScreen onStartWorkout={handleStartWorkout} />;
+    return <WorkoutsScreen onStartWorkout={handleStartWorkout} onBack={handleBackFromWorkouts} onLogout={handleLogout} />;
   }
 
   if (currentScreen === 'workout-player' && currentWorkout) {
@@ -129,6 +185,7 @@ export default function App() {
         workout={currentWorkout}
         onComplete={handleWorkoutComplete}
         onExit={handleWorkoutExit}
+        onLogout={handleLogout}
       />
     );
   }
@@ -141,8 +198,15 @@ export default function App() {
         colors={['#4CAF50', '#45a049']}
         style={styles.header}
       >
-        <Text style={styles.headerTitle}>HomeFit Coach</Text>
-        <Text style={styles.headerSubtitle}>Your Personal Fitness Journey</Text>
+        <View style={styles.welcomeHeader}>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>HomeFit Coach</Text>
+            <Text style={styles.headerSubtitle}>Your Personal Fitness Journey</Text>
+          </View>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <MaterialIcons name="logout" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       {/* Main Content */}
@@ -150,11 +214,27 @@ export default function App() {
         {/* Welcome Section */}
         <View style={styles.welcomeSection}>
           <MaterialIcons name="fitness-center" size={60} color="#4CAF50" />
-          <Text style={styles.welcomeTitle}>Welcome to HomeFit Coach!</Text>
+          <Text style={styles.welcomeTitle}>
+            {userProfile ? getWelcomeMessage(userProfile.name, false) : 'Welcome to HomeFit Coach!'}
+          </Text>
           <Text style={styles.welcomeText}>
             Your personalized fitness journey starts here. Get customized workouts 
             based on your goals, fitness level, and available equipment.
           </Text>
+          
+          {/* Motivational Quote */}
+          {motivationalQuote && (
+            <View style={styles.quoteContainer}>
+              <MaterialIcons name="format-quote" size={24} color="#4CAF50" />
+              <Text style={styles.quoteText}>{motivationalQuote}</Text>
+              <TouchableOpacity 
+                onPress={() => setMotivationalQuote(getRandomQuote())}
+                style={styles.refreshQuoteButton}
+              >
+                <MaterialIcons name="refresh" size={20} color="#4CAF50" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Features */}
@@ -228,7 +308,20 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 30,
     paddingHorizontal: 20,
+  },
+  welcomeHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   headerTitle: {
     fontSize: 32,
@@ -272,6 +365,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 20,
+  },
+  quoteContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  quoteText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    fontStyle: 'italic',
+    lineHeight: 20,
+    marginLeft: 8,
+  },
+  refreshQuoteButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   featuresSection: {
     marginBottom: 30,
@@ -367,7 +482,7 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
-  progressContainer: {
+  progressBarContainer: {
     alignItems: 'center',
   },
   progressBar: {
@@ -487,7 +602,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     marginBottom: 30,
   },
-  disabledButton: {
+  disabledAuthButton: {
     backgroundColor: '#ccc',
   },
   nextButtonText: {
@@ -639,7 +754,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   // Progress indicator styles
-  progressContainer: {
+  progressDotsContainer: {
     alignItems: 'center',
     paddingVertical: 20,
   },
@@ -659,12 +774,6 @@ const styles = StyleSheet.create({
   progressDotActive: {
     backgroundColor: '#ffffff',
     transform: [{ scale: 1.2 }],
-  },
-  progressText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '500',
-    opacity: 0.9,
   },
   // Form styles
   formContainer: {
@@ -734,7 +843,7 @@ const styles = StyleSheet.create({
 });
 
 // Onboarding Screen Component
-const OnboardingScreen = ({ onBack }: { onBack: () => void }) => {
+const OnboardingScreen = ({ onBack, onComplete }: { onBack: () => void; onComplete: () => void }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
@@ -775,27 +884,49 @@ const OnboardingScreen = ({ onBack }: { onBack: () => void }) => {
     setIsSaving(true);
     try {
       const currentUser = AuthService.getCurrentUser();
+      console.log('Current user for onboarding completion:', currentUser);
+      
       if (currentUser) {
-        await AuthService.updateUserProfile(currentUser.uid, {
-          fitnessLevel: selectedLevel as 'beginner' | 'intermediate' | 'advanced',
-          primaryGoal: selectedGoal as any,
+        console.log('Updating user profile with:', {
+          fitnessLevel: selectedLevel,
+          primaryGoal: selectedGoal,
           biologicalSex: personalInfo.biologicalSex,
-          age: parseInt(personalInfo.age) || 0,
-          height: parseFloat(personalInfo.height) || 0,
-          weight: parseFloat(personalInfo.weight) || 0,
-          targetWeight: parseFloat(personalInfo.targetWeight) || undefined,
-          availableEquipment: ['none'], // Default for now
-          workoutFrequency: 3, // Default
+          age: personalInfo.age,
+          height: personalInfo.height,
+          weight: personalInfo.weight
         });
+        
+        try {
+          await AuthService.updateUserProfile(currentUser.uid, {
+            fitnessLevel: selectedLevel as 'beginner' | 'intermediate' | 'advanced',
+            primaryGoal: selectedGoal as any,
+            biologicalSex: personalInfo.biologicalSex,
+            age: parseInt(personalInfo.age) || 0,
+            height: parseFloat(personalInfo.height) || 0,
+            weight: parseFloat(personalInfo.weight) || 0,
+            targetWeight: parseFloat(personalInfo.targetWeight) || undefined,
+            availableEquipment: ['none'], // Default for now
+            workoutFrequency: 3, // Default
+          });
+          
+          console.log('User profile updated successfully');
+        } catch (profileError) {
+          console.error('Profile update failed, but continuing with onboarding:', profileError);
+          // Don't block the user if profile update fails
+        }
+        
+        // Get user name for personalized message
+        const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'there';
+        
         Alert.alert(
-          'Welcome to HomeFit Coach!',
-          `Great! You've selected ${selectedGoal} as a ${selectedLevel}. Your personalized fitness journey is ready to begin!`,
+          getWelcomeMessage(userName, true),
+          `Great! You've selected ${selectedGoal?.replace('_', ' ')} as a ${selectedLevel}. Your personalized fitness journey is ready to begin!\n\n${getRandomQuote()}`,
           [
             {
               text: 'Start My Journey',
               onPress: () => {
-                Alert.alert('Success!', 'Your personalized plan is ready. The full app features will be available in the complete version.');
-                onBack();
+                // Navigate to welcome screen instead of going back
+                onComplete();
               }
             }
           ]
@@ -834,7 +965,7 @@ const OnboardingScreen = ({ onBack }: { onBack: () => void }) => {
         </View>
         
         {/* Progress Indicator */}
-        <View style={styles.progressContainer}>
+        <View style={styles.progressDotsContainer}>
           <View style={styles.progressDots}>
             {[0, 1, 2, 3].map((step) => (
               <View
@@ -852,7 +983,7 @@ const OnboardingScreen = ({ onBack }: { onBack: () => void }) => {
         </View>
         
         {/* Progress Bar */}
-        <View style={styles.progressContainer}>
+        <View style={styles.progressBarContainer}>
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${((currentStep + 1) / 4) * 100}%` }]} />
           </View>
@@ -876,7 +1007,7 @@ const OnboardingScreen = ({ onBack }: { onBack: () => void }) => {
                 onPress={() => setSelectedGoal(goal.id)}
               >
                 <View style={[styles.optionIcon, { backgroundColor: goal.color }]}>
-                  <MaterialIcons name={goal.icon} size={24} color="#ffffff" />
+                  <MaterialIcons name={goal.icon as any} size={24} color="#ffffff" />
                 </View>
                 <Text style={styles.optionTitle}>{goal.title}</Text>
                 {selectedGoal === goal.id && (
@@ -919,7 +1050,7 @@ const OnboardingScreen = ({ onBack }: { onBack: () => void }) => {
         {currentStep === 2 && (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Tell us about yourself</Text>
-            <Text style={styles.stepDescription}>
+            <Text style={styles.stepSubtitle}>
               This helps us create more personalized recommendations for you.
             </Text>
             
@@ -1204,7 +1335,7 @@ const AuthScreen = ({ onSignUp, onSignIn }: { onSignUp: () => void; onSignIn: ()
           </View>
 
           <TouchableOpacity 
-            style={[styles.authButton, isLoading && styles.disabledButton]} 
+            style={[styles.authButton, isLoading && styles.disabledAuthButton]} 
             onPress={handleAuth}
             disabled={isLoading}
           >

@@ -11,7 +11,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { OnboardingStackParamList } from '../../types';
-import { AuthService } from '../../services/auth';
+import AuthService from '../../services/authService';
 
 type PersonalizedPlanScreenNavigationProp = StackNavigationProp<OnboardingStackParamList, 'PersonalizedPlan'>;
 

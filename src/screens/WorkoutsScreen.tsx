@@ -12,12 +12,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import WorkoutService, { Workout } from '../services/workoutService';
 import AuthService from '../services/authService';
+import { sampleWorkouts } from '../data/sampleData';
 
 interface Props {
   onStartWorkout: (workout: Workout) => void;
+  onBack: () => void;
+  onLogout: () => void;
 }
 
-const WorkoutsScreen: React.FC<Props> = ({ onStartWorkout }) => {
+const WorkoutsScreen: React.FC<Props> = ({ onStartWorkout, onBack, onLogout }) => {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [filteredWorkouts, setFilteredWorkouts] = useState<Workout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,10 +47,18 @@ const WorkoutsScreen: React.FC<Props> = ({ onStartWorkout }) => {
     try {
       setIsLoading(true);
       const allWorkouts = await WorkoutService.getWorkouts();
-      setWorkouts(allWorkouts);
+      
+      // If no workouts from database, use sample data
+      if (allWorkouts.length === 0) {
+        console.log('No workouts in database, using sample data');
+        setWorkouts(sampleWorkouts);
+      } else {
+        setWorkouts(allWorkouts);
+      }
     } catch (error) {
       console.error('Error loading workouts:', error);
-      Alert.alert('Error', 'Failed to load workouts');
+      console.log('Using sample data as fallback');
+      setWorkouts(sampleWorkouts);
     } finally {
       setIsLoading(false);
     }
@@ -183,10 +194,20 @@ const WorkoutsScreen: React.FC<Props> = ({ onStartWorkout }) => {
         colors={['#4CAF50', '#45a049']}
         style={styles.header}
       >
-        <Text style={styles.headerTitle}>Workout Library</Text>
-        <Text style={styles.headerSubtitle}>
-          Choose your perfect workout
-        </Text>
+        <View style={styles.workoutHeader}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <MaterialIcons name="arrow-back" size={24} color="#ffffff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Workout Library</Text>
+            <Text style={styles.headerSubtitle}>
+              Choose your perfect workout
+            </Text>
+          </View>
+          <TouchableOpacity onPress={onLogout} style={styles.logoutButton}>
+            <MaterialIcons name="logout" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       <ScrollView
@@ -251,6 +272,25 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 30,
     paddingHorizontal: 20,
+  },
+  workoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   headerTitle: {
     fontSize: 28,
